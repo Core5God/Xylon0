@@ -22,7 +22,6 @@
 
   /* Global Text Hover Effect - Applies to all elements to ensure every piece of text is covered */
   * {
-    @apply transition-colors duration-300;
     cursor: none;
   }
 

@@ -13,16 +13,22 @@ import {
   AnimatePresence, 
   useMotionValue,
   useVelocity,
-  useAnimationFrame,
   MotionValue
 } from "motion/react";
 import { AICreator } from './components/AICreator';
-import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, Timestamp, deleteDoc, doc } from "firebase/firestore";
-import { auth, db, googleProvider } from "./firebase";
+import { db } from "./firebase";
 import { Toaster, toast } from "sonner";
-import { GoogleGenAI } from "@google/genai";
 import Lenis from "lenis";
+
+// 模拟用户接口
+interface MockUser {
+  uid: string;
+  displayName: string;
+  photoURL: string;
+}
+
+// ... (rest of the file remains the same, but update handleLogin/handleLogout/useEffect)
 
 const ScrambleText = ({ text, className = "" }: { text: string; className?: string }) => {
   const [displayText, setDisplayText] = useState(text);
@@ -261,16 +267,18 @@ const FloatingElements = ({ mouseX, mouseY }: { mouseX: any; mouseY: any }) => {
   );
 };
 
+
 const CustomCursor = ({ mouseX, mouseY, isHovering }: { mouseX: MotionValue<number>, mouseY: MotionValue<number>, isHovering: boolean }) => {
   return (
     <motion.div
-      className="custom-cursor"
+      className="fixed top-0 left-0 w-4 h-4 rounded-full bg-white pointer-events-none z-[99999] mix-blend-difference"
       style={{
         x: mouseX,
         y: mouseY,
+        translateX: "-50%",
+        translateY: "-50%",
         scale: isHovering ? 2 : 1,
       }}
-      transition={{ type: "spring", stiffness: 500, damping: 28 }}
     />
   );
 };
@@ -663,24 +671,14 @@ export default function App() {
     ([vx, vy]) => Math.sqrt(Math.pow(Number(vx), 2) + Math.pow(Number(vy), 2))
   );
 
-  // Smooth springs for different layers
-  const cursorX = useSpring(globalMouseX, { stiffness: 400, damping: 30, mass: 0.2 });
-  const cursorY = useSpring(globalMouseY, { stiffness: 400, damping: 30, mass: 0.2 });
+  const cursorX = globalMouseX;
+  const cursorY = globalMouseY;
   
-  const ringX = useSpring(globalMouseX, { stiffness: 150, damping: 25, mass: 0.8 });
-  const ringY = useSpring(globalMouseY, { stiffness: 150, damping: 25, mass: 0.8 });
-
-  const trailX = useSpring(globalMouseX, { stiffness: 50, damping: 20, mass: 1.5 });
-  const trailY = useSpring(globalMouseY, { stiffness: 50, damping: 20, mass: 1.5 });
-
   // Cursor scaling based on velocity
   const cursorScale = useTransform(mouseVelocity, [0, 2000], [1, 1.5]);
-  const cursorSkewX = useTransform(mouseXVelocity, [-2000, 2000], [-15, 15]);
-  const cursorSkewY = useTransform(mouseYVelocity, [-2000, 2000], [-15, 15]);
 
   // Hover state for interactive elements
   const [isHovering, setIsHovering] = useState(false);
-  const hoverScale = useSpring(isHovering ? 2.5 : 1, { stiffness: 300, damping: 20 });
 
   // Initialize Lenis Smooth Scroll
   useEffect(() => {
@@ -751,28 +749,16 @@ export default function App() {
   // Active Tab State for Brand Details
   const [activeTab, setActiveTab] = useState<'elements' | 'colors' | 'interpretation'>('elements');
 
-  // Firebase Auth State
-  const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [isAuthReady, setIsAuthReady] = useState(false);
+  // Mock Auth State
+  const [user, setUser] = useState<MockUser | null>(null);
 
   // Comments State
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Handle Auth
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setIsAuthReady(true);
-    });
-    return () => unsubscribe();
-  }, []);
-
   // Handle Comments Fetching
   useEffect(() => {
-    if (!isAuthReady) return;
-
     const q = query(collection(db, "comments"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const commentsData = snapshot.docs.map(doc => ({
@@ -785,22 +771,20 @@ export default function App() {
     });
 
     return () => unsubscribe();
-  }, [isAuthReady]);
+  }, []);
 
   const handleLogin = async () => {
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-      console.error("Login failed:", error);
-    }
+    setUser({
+      uid: "mock-user-123",
+      displayName: "游客用户",
+      photoURL: "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
+    });
+    toast.success("已模拟登录！");
   };
 
   const handleLogout = async () => {
-    try {
-      await signOut(auth);
-    } catch (error) {
-      console.error("Logout failed:", error);
-    }
+    setUser(null);
+    toast.success("已退出登录");
   };
 
   const handleSubmitComment = async (e: React.FormEvent) => {
@@ -846,75 +830,12 @@ export default function App() {
     <div ref={containerRef} className="bg-bg-dark cursor-auto md:cursor-none">
       {/* Custom Cursor Layers */}
       
-      {/* 1. Outer Trail (Liquid Lag) */}
-      <motion.div
-        className="fixed top-0 left-0 w-16 h-16 rounded-full border border-primary/5 pointer-events-none z-[100] hidden md:block"
-        style={{
-          x: trailX,
-          y: trailY,
-          translateX: "-50%",
-          translateY: "-50%",
-          scale: hoverScale,
-        }}
-      />
 
-      {/* 2. Middle Ring (Responsive Lag) */}
-      <motion.div
-        className="fixed top-0 left-0 w-10 h-10 rounded-full border border-primary/20 pointer-events-none z-[100] hidden md:block"
-        style={{
-          x: ringX,
-          y: ringY,
-          translateX: "-50%",
-          translateY: "-50%",
-          scale: useTransform(hoverScale, (s) => Number(s) * 0.8),
-        }}
-      />
-
-      {/* 3. Inner Dot (High Precision with Velocity Stretch) */}
-      <motion.div
-        className="fixed top-0 left-0 w-2 h-2 rounded-full bg-primary pointer-events-none z-[101] mix-blend-screen hidden md:block shadow-[0_0_20px_rgba(91,59,163,1)]"
-        style={{
-          x: cursorX,
-          y: cursorY,
-          translateX: "-50%",
-          translateY: "-50%",
-          scaleX: useTransform(cursorScale, (s) => Number(s) * (isHovering ? 1.5 : 1)),
-          scaleY: useTransform(cursorScale, (s) => (1 / Number(s)) * (isHovering ? 1.5 : 1)),
-          skewX: cursorSkewX,
-          skewY: cursorSkewY,
-        }}
-      />
-
-      {/* 4. Liquid Trail Dots */}
-      {[0.1, 0.2, 0.3].map((delay, i) => (
-        <motion.div
-          key={i}
-          className="fixed top-0 left-0 w-1 h-1 rounded-full bg-primary/30 pointer-events-none z-[100] hidden md:block"
-          style={{
-            x: useSpring(globalMouseX, { stiffness: 100 - i * 20, damping: 20 + i * 5 }),
-            y: useSpring(globalMouseY, { stiffness: 100 - i * 20, damping: 20 + i * 5 }),
-            translateX: "-50%",
-            translateY: "-50%",
-          }}
-        />
-      ))}
-
-      {/* 4. Hover Glow (Only visible when hovering) */}
-      <motion.div
-        className="fixed top-0 left-0 w-24 h-24 rounded-full bg-primary/20 blur-2xl pointer-events-none z-[99] hidden md:block"
-        style={{
-          x: cursorX,
-          y: cursorY,
-          translateX: "-50%",
-          translateY: "-50%",
-          opacity: isHovering ? 0.6 : 0,
-          scale: isHovering ? 1.5 : 0,
-        }}
-      />
-
-      <Toaster theme="dark" position="bottom-right" />
-      <DynamicBackground mouseX={trailX} mouseY={trailY} />
+      {/* Simple Cursor */}
       <CustomCursor mouseX={cursorX} mouseY={cursorY} isHovering={isHovering} />
+      
+      <Toaster theme="dark" position="bottom-right" />
+      <DynamicBackground mouseX={globalMouseX} mouseY={globalMouseY} />
       
       {/* 顶部滚动进度条 */}
       <motion.div
