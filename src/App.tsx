@@ -12,7 +12,6 @@ import {
   useInView, 
   AnimatePresence, 
   useMotionValue,
-  useVelocity,
   MotionValue
 } from "motion/react";
 import { AICreator } from './components/AICreator';
@@ -92,53 +91,6 @@ const Marquee = ({ text, speed = 20 }: { text: string; speed?: number }) => {
   );
 };
 
-const MagneticText = ({ children, strength = 0.5, className = "" }: { children: React.ReactNode; strength?: number; className?: string }) => {
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const rotateX = useMotionValue(0);
-  const rotateY = useMotionValue(0);
-  const springX = useSpring(x, { stiffness: 300, damping: 20, mass: 0.5 });
-  const springY = useSpring(y, { stiffness: 300, damping: 20, mass: 0.5 });
-  const springRotateX = useSpring(rotateX, { stiffness: 300, damping: 20, mass: 0.5 });
-  const springRotateY = useSpring(rotateY, { stiffness: 300, damping: 20, mass: 0.5 });
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    const { clientX, clientY, currentTarget } = e;
-    const { left, top, width, height } = currentTarget.getBoundingClientRect();
-    const centerX = left + width / 2;
-    const centerY = top + height / 2;
-    
-    x.set((clientX - centerX) * strength);
-    y.set((clientY - centerY) * strength);
-    rotateX.set((clientY - centerY) * (strength * 0.1));
-    rotateY.set((clientX - centerX) * (strength * -0.1));
-  };
-
-  const handleMouseLeave = () => {
-    x.set(0);
-    y.set(0);
-    rotateX.set(0);
-    rotateY.set(0);
-  };
-
-  return (
-    <motion.div
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      style={{ 
-        x: springX, 
-        y: springY, 
-        rotateX: springRotateX, 
-        rotateY: springRotateY,
-        transformStyle: 'preserve-3d'
-      }}
-      className={`inline-block ${className}`}
-    >
-      {children}
-    </motion.div>
-  );
-};
-
 
 const PerspectiveSection = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => {
   const ref = useRef(null);
@@ -214,13 +166,13 @@ const FloatingElements = ({ mouseX, mouseY }: { mouseX: any; mouseY: any }) => {
 const CustomCursor = ({ mouseX, mouseY, isHovering }: { mouseX: MotionValue<number>, mouseY: MotionValue<number>, isHovering: boolean }) => {
   return (
     <motion.div
-      className="fixed top-0 left-0 w-4 h-4 rounded-full bg-white pointer-events-none z-[99999] mix-blend-difference"
+      className="fixed top-0 left-0 w-4 h-4 rounded-full bg-white pointer-events-none z-[300000]"
       style={{
         x: mouseX,
         y: mouseY,
         translateX: "-50%",
         translateY: "-50%",
-        scale: isHovering ? 2 : 1,
+        scale: isHovering ? 1.5 : 1,
         willChange: "transform"
       }}
     />
@@ -229,9 +181,6 @@ const CustomCursor = ({ mouseX, mouseY, isHovering }: { mouseX: MotionValue<numb
 const DynamicBackground = ({ mouseX, mouseY }: any) => {
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-      {/* 噪点纹理叠加 */}
-      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03] mix-blend-overlay" />
-
       {/* Primary Blob - Simplified */}
       <motion.div
         animate={{
@@ -464,61 +413,10 @@ const TiltCard = ({ children, className = "", ...props }: { children: React.Reac
   );
 };
 
-const Magnetic = ({ children, strength = 0.5 }: { children: React.ReactNode; strength?: number }) => {
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const springX = useSpring(x, { stiffness: 100, damping: 20, mass: 0.1 });
-  const springY = useSpring(y, { stiffness: 100, damping: 20, mass: 0.1 });
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    const { clientX, clientY, currentTarget } = e;
-    const { left, top, width, height } = currentTarget.getBoundingClientRect();
-    const centerX = left + width / 2;
-    const centerY = top + height / 2;
-    x.set((clientX - centerX) * strength);
-    y.set((clientY - centerY) * strength);
-  };
-
-  const handleMouseLeave = () => {
-    x.set(0);
-    y.set(0);
-  };
-
-  return (
-    <motion.div
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      style={{ x: springX, y: springY }}
-    >
-      {children}
-    </motion.div>
-  );
-};
 
 const MagneticButton = ({ children, className, onClick, type, disabled }: any) => {
-  const ref = useRef<HTMLButtonElement>(null);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-
-  const handleMouse = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (disabled) return;
-    const { clientX, clientY } = e;
-    const { height, width, left, top } = ref.current!.getBoundingClientRect();
-    const middleX = clientX - (left + width / 2);
-    const middleY = clientY - (top + height / 2);
-    setPosition({ x: middleX * 0.2, y: middleY * 0.2 });
-  };
-
-  const reset = () => {
-    setPosition({ x: 0, y: 0 });
-  };
-
   return (
     <motion.button
-      ref={ref}
-      onMouseMove={handleMouse}
-      onMouseLeave={reset}
-      animate={{ x: position.x, y: position.y }}
-      transition={{ type: "spring", stiffness: 150, damping: 15, mass: 0.1 }}
       className={`${className} relative overflow-hidden group`}
       onClick={onClick}
       type={type}
@@ -604,19 +502,9 @@ export default function App() {
   const globalMouseY = useMotionValue(0);
   
   // Velocity for dynamic stretching
-  const mouseXVelocity = useVelocity(globalMouseX);
-  const mouseYVelocity = useVelocity(globalMouseY);
-  const mouseVelocity = useTransform(
-    [mouseXVelocity, mouseYVelocity],
-    ([vx, vy]) => Math.sqrt(Math.pow(Number(vx), 2) + Math.pow(Number(vy), 2))
-  );
-
   const cursorX = globalMouseX;
   const cursorY = globalMouseY;
   
-  // Cursor scaling based on velocity
-  const cursorScale = useTransform(mouseVelocity, [0, 2000], [1, 1.5]);
-
   // Hover state for interactive elements
   const [isHovering, setIsHovering] = useState(false);
 
@@ -683,8 +571,8 @@ export default function App() {
   const rotateX = useTransform(mouseY, [-1, 1], [10, -10]);
   const rotateY = useTransform(mouseX, [-1, 1], [-10, 10]);
   
-  const springRotateX = useSpring(rotateX, { damping: 30, stiffness: 100 });
-  const springRotateY = useSpring(rotateY, { damping: 30, stiffness: 100 });
+  const springRotateX = useSpring(rotateX, { damping: 15, stiffness: 200 });
+  const springRotateY = useSpring(rotateY, { damping: 15, stiffness: 200 });
 
   // Active Tab State for Brand Details
   const [activeTab, setActiveTab] = useState<'elements' | 'colors' | 'interpretation'>('elements');
@@ -987,21 +875,11 @@ export default function App() {
             </div>
           </div>
           <nav className="hidden md:flex gap-8 text-sm font-bold tracking-widest text-white/70">
-            <Magnetic strength={0.3}>
               <a href="#hero" onClick={(e) => { e.preventDefault(); document.getElementById('hero')?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-primary transition-colors">首页</a>
-            </Magnetic>
-            <Magnetic strength={0.3}>
               <a href="#brand-details" onClick={(e) => { e.preventDefault(); document.getElementById('brand-details')?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-primary transition-colors">品牌解析</a>
-            </Magnetic>
-            <Magnetic strength={0.3}>
               <a href="#showcase" onClick={(e) => { e.preventDefault(); document.getElementById('showcase')?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-primary transition-colors">展示</a>
-            </Magnetic>
-            <Magnetic strength={0.3}>
               <a href="#ai-creator" onClick={(e) => { e.preventDefault(); document.getElementById('ai-creator')?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-primary transition-colors">AI 共创</a>
-            </Magnetic>
-            <Magnetic strength={0.3}>
               <a href="#comments" onClick={(e) => { e.preventDefault(); document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-primary transition-colors">留言</a>
-            </Magnetic>
           </nav>
           <div>
             {user ? (
@@ -1014,11 +892,9 @@ export default function App() {
                   )}
                   <span className="text-sm font-bold hidden sm:block">{user.displayName}</span>
                 </div>
-                <Magnetic strength={0.2}>
-                  <button onClick={handleLogout} className="text-white/70 hover:text-white transition-colors" title="退出登录">
-                    🚪
-                  </button>
-                </Magnetic>
+                <button onClick={handleLogout} className="text-white/70 hover:text-white transition-colors" title="退出登录">
+                  🚪
+                </button>
               </div>
             ) : (
               <MagneticButton 
