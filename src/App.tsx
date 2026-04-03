@@ -16,6 +16,7 @@ import {
   MotionValue
 } from "motion/react";
 import { AICreator } from './components/AICreator';
+import { Reveal, ScrambleText } from './components/SharedComponents';
 import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, Timestamp, deleteDoc, doc } from "firebase/firestore";
 import { db } from "./firebase";
 import { Toaster, toast } from "sonner";
@@ -30,60 +31,6 @@ interface MockUser {
 
 // ... (rest of the file remains the same, but update handleLogin/handleLogout/useEffect)
 
-const ScrambleText = ({ text, className = "" }: { text: string; className?: string }) => {
-  const [displayText, setDisplayText] = useState(text);
-  const chars = "!<>-_\\/[]{}—=+*^?#________";
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true });
-
-  useEffect(() => {
-    if (!isInView) return;
-    
-    let iteration = 0;
-    const interval = setInterval(() => {
-      setDisplayText(prev => 
-        text.split("")
-          .map((char, index) => {
-            if (index < iteration) return text[index];
-            return chars[Math.floor(Math.random() * chars.length)];
-          })
-          .join("")
-      );
-      
-      if (iteration >= text.length) clearInterval(interval);
-      iteration += 1 / 3;
-    }, 30);
-
-    return () => clearInterval(interval);
-  }, [isInView, text]);
-
-  return <span ref={ref} className={className}>{displayText}</span>;
-};
-
-const Reveal = ({ children, className = "", delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) => {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: "-100px" });
-
-  return (
-    <div ref={ref} className={`relative overflow-hidden ${className}`}>
-      <motion.div
-        initial={{ y: 75, opacity: 0 }}
-        animate={isInView ? { y: 0, opacity: 1 } : { y: 75, opacity: 0 }}
-        transition={{ duration: 0.8, delay, ease: [0.33, 1, 0.68, 1] }}
-      >
-        {children}
-      </motion.div>
-      <motion.div
-        initial={{ scaleY: 1 }}
-        animate={isInView ? { scaleY: 0 } : { scaleY: 1 }}
-        transition={{ duration: 0.8, delay, ease: [0.33, 1, 0.68, 1] }}
-        style={{ originY: 0 }}
-        className="absolute inset-0 bg-primary z-20"
-      />
-    </div>
-  );
-};
-
 const ParallaxImage = ({ src, alt, className = "" }: { src: string; alt: string; className?: string }) => {
   const ref = useRef(null);
   const { scrollYProgress } = useScroll({
@@ -91,18 +38,16 @@ const ParallaxImage = ({ src, alt, className = "" }: { src: string; alt: string;
     offset: ["start end", "end start"]
   });
   
-  // 增强视差效果：更大幅度的位移和缩放
-  const y = useTransform(scrollYProgress, [0, 1], ["-20%", "20%"]);
-  const scale = useTransform(scrollYProgress, [0, 0.5, 1], [1.1, 1.4, 1.1]);
-  const blur = useTransform(scrollYProgress, [0, 0.5, 1], ["blur(15px)", "blur(0px)", "blur(15px)"]);
-  const opacity = useTransform(scrollYProgress, [0, 0.5, 1], [0.2, 0.6, 0.2]);
+  // 移除 blur 和 opacity 动画，减少重绘压力
+  const y = useTransform(scrollYProgress, [0, 1], ["-15%", "15%"]);
+  const scale = useTransform(scrollYProgress, [0, 0.5, 1], [1.05, 1.2, 1.05]);
 
   return (
     <div ref={ref} className={`relative overflow-hidden ${className}`}>
       <motion.img
         src={src}
         alt={alt}
-        style={{ y, scale, filter: blur, opacity }}
+        style={{ y, scale, willChange: "transform" }}
         className="absolute inset-0 w-full h-full object-cover"
         referrerPolicy="no-referrer"
       />
@@ -121,7 +66,7 @@ const HorizontalScroll = ({ children }: { children: React.ReactNode }) => {
   return (
     <section ref={targetRef} className="relative h-[300vh] bg-transparent">
       <div className="sticky top-0 flex h-screen items-center overflow-hidden">
-        <motion.div style={{ x }} className="flex gap-8 px-8">
+        <motion.div style={{ x, willChange: "transform" }} className="flex gap-8 px-8">
           {children}
         </motion.div>
       </div>
@@ -202,16 +147,15 @@ const PerspectiveSection = ({ children, className = "" }: { children: React.Reac
     offset: ["start end", "end start"]
   });
 
-  const rotateX = useTransform(scrollYProgress, [0, 0.5, 1], [15, 0, -15]);
+  const rotateX = useTransform(scrollYProgress, [0, 0.5, 1], [10, 0, -10]);
   const opacity = useTransform(scrollYProgress, [0, 0.1, 0.9, 1], [0, 1, 1, 0]);
-  const scale = useTransform(scrollYProgress, [0, 0.5, 1], [0.8, 1, 0.8]);
-  const y = useTransform(scrollYProgress, [0, 0.5, 1], [100, 0, -100]);
-  const blur = useTransform(scrollYProgress, [0, 0.2, 0.8, 1], [20, 0, 0, 20]);
+  const scale = useTransform(scrollYProgress, [0, 0.5, 1], [0.9, 1, 0.9]);
+  const y = useTransform(scrollYProgress, [0, 0.5, 1], [50, 0, -50]);
 
   return (
     <motion.div
       ref={ref}
-      style={{ rotateX, opacity, scale, y, filter: useTransform(blur, (b) => `blur(${b}px)`), perspective: 2000 }}
+      style={{ rotateX, opacity, scale, y, perspective: 2000, willChange: "transform, opacity" }}
       className={`relative ${className}`}
     >
       {children}
@@ -220,48 +164,47 @@ const PerspectiveSection = ({ children, className = "" }: { children: React.Reac
 };
 
 const FloatingElements = ({ mouseX, mouseY }: { mouseX: any; mouseY: any }) => {
-  const x1 = useTransform(mouseX, [-1, 1], [-50, 50]);
-  const y1 = useTransform(mouseY, [-1, 1], [-50, 50]);
-  const x2 = useTransform(mouseX, [-1, 1], [80, -80]);
-  const y2 = useTransform(mouseY, [-1, 1], [80, -80]);
+  const x1 = useTransform(mouseX, [-1, 1], [-30, 30]);
+  const y1 = useTransform(mouseY, [-1, 1], [-30, 30]);
+  const x2 = useTransform(mouseX, [-1, 1], [50, -50]);
+  const y2 = useTransform(mouseY, [-1, 1], [50, -50]);
 
   return (
     <>
       <motion.div
-        style={{ x: x1, y: y1 }}
+        style={{ x: x1, y: y1, willChange: "transform" }}
         animate={{
-          y: [0, -40, 0],
-          rotate: [0, 10, 0],
-          scale: [1, 1.1, 1],
+          y: [0, -20, 0],
+          rotate: [0, 5, 0],
         }}
         transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-        className="floating-element top-20 left-[10%] text-8xl pointer-events-none blur-[1px]"
+        className="floating-element top-20 left-[10%] text-8xl pointer-events-none"
       >
         🔥
       </motion.div>
       <motion.div
-        style={{ x: x2, y: y2 }}
+        style={{ x: x2, y: y2, willChange: "transform" }}
         animate={{
-          y: [0, 40, 0],
-          rotate: [0, -10, 0],
-          scale: [1, 1.2, 1],
+          y: [0, 20, 0],
+          rotate: [0, -5, 0],
         }}
         transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-        className="floating-element bottom-40 right-[15%] text-9xl pointer-events-none blur-[2px]"
+        className="floating-element bottom-40 right-[15%] text-9xl pointer-events-none"
       >
         ✨
       </motion.div>
       <motion.div
         style={{ 
-          x: useTransform(mouseX, [-1, 1], [-100, 100]),
-          y: useTransform(mouseY, [-1, 1], [-100, 100])
+          x: useTransform(mouseX, [-1, 1], [-60, 60]),
+          y: useTransform(mouseY, [-1, 1], [-60, 60]),
+          willChange: "transform"
         }}
         animate={{
-          scale: [1, 1.5, 1],
-          opacity: [0.05, 0.15, 0.05],
+          scale: [1, 1.2, 1],
+          opacity: [0.05, 0.1, 0.05],
         }}
         transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-        className="floating-element top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/30 rounded-full blur-[150px] pointer-events-none"
+        className="floating-element top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/20 rounded-full blur-[100px] pointer-events-none"
       />
     </>
   );
@@ -278,6 +221,7 @@ const CustomCursor = ({ mouseX, mouseY, isHovering }: { mouseX: MotionValue<numb
         translateX: "-50%",
         translateY: "-50%",
         scale: isHovering ? 2 : 1,
+        willChange: "transform"
       }}
     />
   );
@@ -285,79 +229,44 @@ const CustomCursor = ({ mouseX, mouseY, isHovering }: { mouseX: MotionValue<numb
 const DynamicBackground = ({ mouseX, mouseY }: any) => {
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-      <motion.div 
-        style={{ 
-          x: mouseX, 
-          y: mouseY,
-          translateX: "-50%",
-          translateY: "-50%"
-        }}
-        className="absolute w-[800px] h-[800px] bg-primary/5 rounded-full blur-[150px]"
-      />
-      
       {/* 噪点纹理叠加 */}
       <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03] mix-blend-overlay" />
 
-      {/* Primary Blob */}
+      {/* Primary Blob - Simplified */}
       <motion.div
         animate={{
-          x: [0, 100, -50, 0],
-          y: [0, -50, 100, 0],
-          scale: [1, 1.2, 0.9, 1],
+          scale: [1, 1.1, 1],
+          opacity: [0.05, 0.1, 0.05],
+        }}
+        transition={{
+          duration: 15,
+          repeat: Infinity,
+          ease: "linear",
+        }}
+        className="absolute top-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-primary/10 rounded-full blur-[80px]"
+      />
+      
+      {/* Secondary Blob - Simplified */}
+      <motion.div
+        animate={{
+          scale: [1, 0.9, 1],
+          opacity: [0.05, 0.08, 0.05],
         }}
         transition={{
           duration: 20,
           repeat: Infinity,
           ease: "linear",
         }}
-        className="absolute top-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-primary/10 rounded-full blur-[120px]"
-      />
-      
-      {/* Secondary Blob */}
-      <motion.div
-        animate={{
-          x: [0, -120, 80, 0],
-          y: [0, 100, -60, 0],
-          scale: [1, 0.8, 1.1, 1],
-        }}
-        transition={{
-          duration: 25,
-          repeat: Infinity,
-          ease: "linear",
-        }}
-        className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-secondary/10 rounded-full blur-[120px]"
-      />
-
-      {/* Accent Blob */}
-      <motion.div
-        animate={{
-          x: [0, 50, -100, 0],
-          y: [0, 150, -50, 0],
-        }}
-        transition={{
-          duration: 18,
-          repeat: Infinity,
-          ease: "linear",
-        }}
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[40vw] h-[40vw] bg-blue-500/5 rounded-full blur-[100px]"
-      />
-
-      {/* Subtle Grid Overlay */}
-      <div 
-        className="absolute inset-0 opacity-[0.03]" 
-        style={{ 
-          backgroundImage: `none`,
-          backgroundSize: '40px 40px'
-        }} 
+        className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-secondary/10 rounded-full blur-[80px]"
       />
     </div>
   );
 };
 
-const BackgroundParticles = ({ mouseX, mouseY }: any) => {
+const BackgroundParticles = () => {
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-      {[...Array(15)].map((_, i) => (
+      {[...Array(8)].map((_, i) => (
         <motion.div
           key={i}
           initial={{ 
@@ -367,23 +276,15 @@ const BackgroundParticles = ({ mouseX, mouseY }: any) => {
           }}
           animate={{ 
             y: ["-10%", "110%"],
-            opacity: [0, 0.3, 0],
-            rotate: [0, 360]
-          }}
-          style={{
-            x: useTransform(mouseX, [-1, 1], [Math.random() * -50, Math.random() * 50]),
-            y: useTransform(mouseY, [-1, 1], [Math.random() * -50, Math.random() * 50]),
+            opacity: [0, 0.2, 0],
           }}
           transition={{ 
-            y: {
-              duration: Math.random() * 20 + 20, 
-              repeat: Infinity, 
-              ease: "linear",
-              delay: Math.random() * 10
-            },
-            opacity: { duration: 2 }
+            duration: Math.random() * 20 + 20, 
+            repeat: Infinity, 
+            ease: "linear",
+            delay: Math.random() * 10
           }}
-          className="absolute w-1 h-1 bg-primary/40 rounded-full blur-[1px]"
+          className="absolute w-1 h-1 bg-primary/20 rounded-full"
         />
       ))}
     </div>
@@ -392,13 +293,13 @@ const BackgroundParticles = ({ mouseX, mouseY }: any) => {
 
 const SectionDivider = () => (
   <div className="relative h-32 w-full overflow-hidden pointer-events-none">
-    <div className="absolute inset-0 bg-primary/5 blur-3xl opacity-30" />
+    <div className="absolute inset-0 bg-primary/5 opacity-20" />
     <motion.div 
       initial={{ scaleX: 0 }}
       whileInView={{ scaleX: 1 }}
       viewport={{ once: true }}
       transition={{ duration: 1.5, ease: "circOut" }}
-      className="absolute top-1/2 left-0 right-0 h-[1px] bg-primary/5"
+      className="absolute top-1/2 left-0 right-0 h-[1px] bg-primary/10"
     />
   </div>
 );
@@ -452,15 +353,15 @@ const LogoShowcaseContent = () => {
         }}
         className="w-full flex flex-col items-center"
       >
-        {/* 动态光影层 */}
+        {/* 动态光影层 - Simplified */}
         <motion.div 
           style={{ 
             rotateX, 
             rotateY, 
             scale,
-            opacity: useTransform(scale, [1, 1.1], [0, 0.3])
+            opacity: useTransform(scale, [1, 1.1], [0, 0.2])
           }}
-          className="absolute inset-0 bg-primary/20 blur-[100px] rounded-full pointer-events-none"
+          className="absolute inset-0 bg-primary/10 rounded-full pointer-events-none"
         />
         
         <motion.img 
@@ -640,6 +541,45 @@ interface Comment {
   createdAt: Timestamp | null;
 }
 
+const MOOD_CONCEPTS = [
+  {
+    title: "MYSTIC",
+    img: "https://i.postimg.cc/SsMbfGNf/image.png",
+    color: "from-purple-500/20",
+    hex: "#8B5CF6",
+    desc: "探索未知的边界，将古老的神秘主义与现代数字艺术交织。在光影的缝隙中寻找超越现实的视觉共鸣。",
+    keywords: ["Ethereal", "Enigmatic", "Spiritual"],
+    typography: "Serif / Elegant"
+  },
+  {
+    title: "ETHNIC",
+    img: "https://i.postimg.cc/HsJsPbZN/image.png",
+    color: "from-orange-500/20",
+    hex: "#F97316",
+    desc: "根植于大地的原始力量，粗犷的纹理中蕴含着生生不息的生命力。用最纯粹的色彩唤醒沉睡的文化基因。",
+    keywords: ["Raw", "Authentic", "Vibrant"],
+    typography: "Display / Bold"
+  },
+  {
+    title: "MODERN",
+    img: "https://i.postimg.cc/MZmF2LNk/13e48e35167ad06cc06b9621fe9691d5.jpg",
+    color: "from-blue-500/20",
+    hex: "#3B82F6",
+    desc: "极简、克制、精准。以几何的秩序感重塑视觉的纯粹性，在留白中构建无限的想象空间。",
+    keywords: ["Minimal", "Structured", "Clean"],
+    typography: "Sans-serif / Geometric"
+  },
+  {
+    title: "FUTURE",
+    img: "https://i.postimg.cc/SRx7pg2t/image.png",
+    color: "from-primary/20",
+    hex: "#343a96",
+    desc: "超越当下的时间维度，用金属、光影与流体构建明日的视觉语言。每一次交互都是一次向未来的跃迁。",
+    keywords: ["Cyber", "Fluid", "Luminous"],
+    typography: "Mono / Technical"
+  }
+];
+
 export default function App() {
   const containerRef = useRef(null);
   const { scrollYProgress } = useScroll();
@@ -683,10 +623,10 @@ export default function App() {
   // Initialize Lenis Smooth Scroll
   useEffect(() => {
     const lenis = new Lenis({
-      duration: 1.5, // Slightly slower for more "luxurious" feel
+      duration: 1.2, // Snappier feel
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
-      wheelMultiplier: 1.1,
+      wheelMultiplier: 1.0,
     });
 
     function raf(time: number) {
@@ -749,8 +689,12 @@ export default function App() {
   // Active Tab State for Brand Details
   const [activeTab, setActiveTab] = useState<'elements' | 'colors' | 'interpretation'>('elements');
 
+  // Moodboard Concept State
+  const [selectedConcept, setSelectedConcept] = useState<number | null>(null);
+
   // Mock Auth State
   const [user, setUser] = useState<MockUser | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Comments State
   const [comments, setComments] = useState<Comment[]>([]);
@@ -774,12 +718,17 @@ export default function App() {
   }, []);
 
   const handleLogin = async () => {
-    setUser({
-      uid: "mock-user-123",
-      displayName: "游客用户",
-      photoURL: "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
-    });
-    toast.success("已模拟登录！");
+    setIsLoggingIn(true);
+    // Simulate network request and authentication process
+    setTimeout(() => {
+      setUser({
+        uid: "mock-user-123",
+        displayName: "游客用户",
+        photoURL: "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
+      });
+      setIsLoggingIn(false);
+      toast.success("已模拟登录！");
+    }, 2500);
   };
 
   const handleLogout = async () => {
@@ -828,6 +777,180 @@ export default function App() {
 
   return (
     <div ref={containerRef} className="bg-bg-dark cursor-auto md:cursor-none">
+      {/* Login Animation Overlay */}
+      <AnimatePresence>
+        {isLoggingIn && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: { duration: 0.5 } }}
+            className="fixed inset-0 z-[100000] flex items-center justify-center bg-bg-dark/95 backdrop-blur-xl"
+          >
+            <div className="relative flex flex-col items-center">
+              {/* Outer scanning ring */}
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                className="absolute w-48 h-48 rounded-full border border-primary/30 border-t-primary border-r-primary"
+              />
+              
+              {/* Inner pulsing ring */}
+              <motion.div
+                animate={{ scale: [0.8, 1.1, 0.8], opacity: [0.3, 0.8, 0.3] }}
+                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute w-32 h-32 rounded-full border border-secondary/50 bg-secondary/10"
+              />
+
+              {/* Center Icon */}
+              <motion.div 
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", damping: 12 }}
+                className="w-24 h-24 bg-black/50 rounded-full border border-white/10 flex items-center justify-center z-10 backdrop-blur-md"
+              >
+                <span className="text-4xl">🧬</span>
+              </motion.div>
+
+              {/* Text */}
+              <div className="mt-16 text-center space-y-3 z-10">
+                <h3 className="text-2xl font-black text-white tracking-[0.2em] uppercase">
+                  <ScrambleText text="NEURAL LINK" />
+                </h3>
+                <motion.div 
+                  className="flex items-center justify-center gap-2 text-primary font-mono text-xs uppercase tracking-widest"
+                >
+                  <motion.span
+                    animate={{ opacity: [0, 1, 0] }}
+                    transition={{ duration: 1.5, repeat: Infinity, delay: 0 }}
+                  >_</motion.span>
+                  <span>Authenticating Identity</span>
+                  <motion.span
+                    animate={{ opacity: [0, 1, 0] }}
+                    transition={{ duration: 1.5, repeat: Infinity, delay: 0.5 }}
+                  >_</motion.span>
+                </motion.div>
+                
+                {/* Progress Bar */}
+                <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden mt-4 mx-auto">
+                  <motion.div 
+                    initial={{ width: "0%" }}
+                    animate={{ width: "100%" }}
+                    transition={{ duration: 2.5, ease: "easeInOut" }}
+                    className="h-full bg-gradient-to-r from-primary to-secondary"
+                  />
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Moodboard Concept Detail Modal */}
+      <AnimatePresence>
+        {selectedConcept !== null && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200000] flex items-center justify-center p-4 md:p-12 bg-black/90 backdrop-blur-2xl"
+          >
+            {/* Close Button */}
+            <button
+              onClick={() => setSelectedConcept(null)}
+              className="absolute top-6 right-6 md:top-12 md:right-12 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white z-50 transition-colors"
+            >
+              ✕
+            </button>
+
+            <motion.div
+              initial={{ y: 50, scale: 0.95, opacity: 0 }}
+              animate={{ y: 0, scale: 1, opacity: 1 }}
+              exit={{ y: 20, scale: 0.95, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="w-full max-w-6xl h-full max-h-[800px] bg-bg-dark border border-white/10 rounded-[24px] overflow-hidden flex flex-col md:flex-row shadow-2xl shadow-black relative"
+            >
+              {/* Left Image */}
+              <div className="w-full md:w-1/2 h-64 md:h-full relative overflow-hidden flex-shrink-0">
+                <motion.img
+                  initial={{ scale: 1.2 }}
+                  animate={{ scale: 1 }}
+                  transition={{ duration: 1.5, ease: "easeOut" }}
+                  src={MOOD_CONCEPTS[selectedConcept].img}
+                  alt={MOOD_CONCEPTS[selectedConcept].title}
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-bg-dark via-transparent to-transparent md:bg-gradient-to-r md:from-transparent md:via-transparent md:to-bg-dark" />
+              </div>
+
+              {/* Right Content */}
+              <div className="w-full md:w-1/2 p-8 md:p-16 flex flex-col justify-center relative overflow-y-auto">
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  <span className="text-primary font-mono text-sm tracking-[0.3em] uppercase mb-4 block">
+                    Concept Analysis
+                  </span>
+                  <h2 className="text-5xl md:text-7xl font-black text-white mb-6 tracking-tighter">
+                    {MOOD_CONCEPTS[selectedConcept].title}
+                  </h2>
+                  <p className="text-white/60 text-lg leading-relaxed mb-12">
+                    {MOOD_CONCEPTS[selectedConcept].desc}
+                  </p>
+
+                  <div className="space-y-8">
+                    <div>
+                      <h4 className="text-xs font-mono text-white/40 uppercase tracking-widest mb-3">Core Keywords</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {MOOD_CONCEPTS[selectedConcept].keywords.map((kw, idx) => (
+                          <span key={idx} className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-sm text-white/80">
+                            {kw}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-8 sm:gap-12">
+                      <div>
+                        <h4 className="text-xs font-mono text-white/40 uppercase tracking-widest mb-3">Primary Hue</h4>
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full shadow-lg" style={{ backgroundColor: MOOD_CONCEPTS[selectedConcept].hex }} />
+                          <span className="text-sm font-mono text-white/80">{MOOD_CONCEPTS[selectedConcept].hex}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-mono text-white/40 uppercase tracking-widest mb-3">Typography</h4>
+                        <p className="text-sm text-white/80">{MOOD_CONCEPTS[selectedConcept].typography}</p>
+                      </div>
+                    </div>
+                    
+                    {/* Action Button */}
+                    <div className="pt-8 mt-8 border-t border-white/10">
+                      <MagneticButton 
+                        onClick={() => {
+                          setSelectedConcept(null);
+                          setTimeout(() => {
+                            const el = document.getElementById('ai-creator');
+                            if (el) {
+                              el.scrollIntoView({ behavior: 'smooth' });
+                            }
+                          }, 300);
+                        }}
+                        className="w-full py-4 bg-primary text-white font-bold tracking-widest uppercase rounded-[12px] hover:bg-primary/80 transition-colors"
+                      >
+                        生成此风格配色
+                      </MagneticButton>
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Custom Cursor Layers */}
       
 
@@ -835,7 +958,8 @@ export default function App() {
       <CustomCursor mouseX={cursorX} mouseY={cursorY} isHovering={isHovering} />
       
       <Toaster theme="dark" position="bottom-right" />
-      <DynamicBackground mouseX={globalMouseX} mouseY={globalMouseY} />
+      <DynamicBackground />
+      <BackgroundParticles />
       
       {/* 顶部滚动进度条 */}
       <motion.div
@@ -844,7 +968,7 @@ export default function App() {
       />
       
       {/* Header / Navigation */}
-      <header className="fixed top-0 left-0 right-0 z-40 bg-bg-dark/80 backdrop-blur-md border-b border-white/10">
+      <header className="fixed top-0 left-0 right-0 z-40 bg-bg-dark/95 border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="relative group px-4 py-2 cursor-pointer">
             {/* Static Border (visible when not hovering) */}
@@ -1353,15 +1477,11 @@ export default function App() {
               </p>
             </div>
             
-            {[
-              { title: "MYSTIC", img: "https://i.postimg.cc/SsMbfGNf/image.png", color: "from-purple-500/20" },
-              { title: "ETHNIC", img: "https://i.postimg.cc/HsJsPbZN/image.png", color: "from-orange-500/20" },
-              { title: "MODERN", img: "https://i.postimg.cc/MZmF2LNk/13e48e35167ad06cc06b9621fe9691d5.jpg", color: "from-blue-500/20" },
-              { title: "FUTURE", img: "https://i.postimg.cc/SRx7pg2t/image.png", color: "from-primary/20" }
-            ].map((item, i) => (
+            {MOOD_CONCEPTS.map((item, i) => (
               <TiltCard 
                 key={i}
-                className="flex-shrink-0 w-[450px] aspect-[3/4] relative group rounded-[12px] overflow-hidden bg-white/5 border border-white/10"
+                onClick={() => setSelectedConcept(i)}
+                className="flex-shrink-0 w-[450px] aspect-[3/4] relative group rounded-[12px] overflow-hidden bg-white/5 border border-white/10 cursor-pointer"
               >
                 <img 
                   src={item.img} 
@@ -1384,8 +1504,9 @@ export default function App() {
                 
                 {/* Glass Overlay on Hover */}
                 <div className="absolute inset-0 bg-white/5 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-center justify-center" style={{ transform: "translateZ(40px)" }}>
-                  <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-white scale-0 group-hover:scale-100 transition-transform duration-500 delay-100">
-                    ➡️
+                  <div className="w-auto px-6 h-16 rounded-full bg-primary flex items-center justify-center text-white font-bold tracking-widest scale-0 group-hover:scale-100 transition-transform duration-500 delay-100 shadow-xl shadow-primary/30 gap-2">
+                    <span>深入沉浸</span>
+                    <span className="text-xl">👁️</span>
                   </div>
                 </div>
               </TiltCard>
@@ -1439,15 +1560,15 @@ export default function App() {
                 <div className="flex items-start gap-4 group">
                   <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">01</div>
                   <div>
-                    <h4 className="font-bold text-white/80 mb-1">输入创意</h4>
-                    <p className="text-xs text-white/40">描述您脑海中的品牌应用场景</p>
+                    <h4 className="font-bold text-white/80 mb-1">输入品牌关键词</h4>
+                    <p className="text-xs text-white/40">描述您品牌的性格、行业或氛围</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-4 group">
                   <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">02</div>
                   <div>
                     <h4 className="font-bold text-white/80 mb-1">算法共鸣</h4>
-                    <p className="text-xs text-white/40">AI 实时解析并重构视觉元素</p>
+                    <p className="text-xs text-white/40">AI 实时解析并生成专属色彩美学</p>
                   </div>
                 </div>
               </div>
@@ -1460,20 +1581,7 @@ export default function App() {
                 <div className="absolute -inset-4 border border-white/5 rounded-[12px] pointer-events-none transition-all duration-700 group-hover:border-primary/20" />
                 
                 <div className="glass-card !p-0 overflow-hidden !rounded-[12px] border-white/10">
-                  <div className="grid grid-cols-1 md:grid-cols-2">
-                    {/* Input Side */}
-                    <div className="p-8 border-b md:border-b-0 md:border-r border-white/10 bg-white/[0.02]">
-                <AICreator />
-                    </div>
-
-                    {/* Preview Side */}
-                    <div className="aspect-square md:aspect-auto bg-black/40 flex items-center justify-center relative overflow-hidden">
-                      <div className="flex flex-col items-center gap-4 text-white/10">
-                        <span className="text-5xl">🖼️</span>
-                        <span className="text-[10px] font-mono uppercase tracking-widest">Waiting for input</span>
-                      </div>
-                    </div>
-                  </div>
+                  <AICreator />
                 </div>
               </div>
             </div>
@@ -1534,6 +1642,7 @@ export default function App() {
                         value={newComment}
                         onChange={(e) => setNewComment(e.target.value)}
                         placeholder="撰写您的想法..."
+                        aria-label="留言内容"
                         className="w-full bg-black/20 border border-white/5 rounded-[12px] p-4 text-sm text-white focus:outline-none focus:border-primary/30 min-h-[120px] transition-all"
                       />
                       
